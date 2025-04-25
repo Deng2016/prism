@@ -78,6 +78,21 @@ func getPortFromEnv() int {
 	return port
 }
 
+// getFullURL constructs the full URL including scheme, host, and path
+func getFullURL(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+
+	host := c.Request.Host
+	if host == "" {
+		host = c.Request.RemoteAddr
+	}
+
+	return fmt.Sprintf("%s://%s%s", scheme, host, c.Request.URL.String())
+}
+
 func main() {
 	// Enable ANSI color support for Windows
 	if term.IsTerminal(int(os.Stdout.Fd())) {
@@ -176,9 +191,12 @@ func main() {
 			}
 		}
 
+		// Get full URL including scheme and host
+		fullURL := getFullURL(c)
+
 		// Create request info object
 		reqInfo := RequestInfo{
-			FullURL: c.Request.URL.String(),
+			FullURL: fullURL,
 			Method:  c.Request.Method,
 			Headers: headers,
 			Body:    body,
@@ -186,7 +204,7 @@ func main() {
 
 		// Print request details to console
 		fmt.Printf("\n=== Request Details ===\n")
-		fmt.Printf("URL: %s\n", reqInfo.FullURL)
+		fmt.Printf("URL: %s\n", fullURL)
 		fmt.Printf("Method: %s\n", reqInfo.Method)
 		fmt.Printf("Headers:\n")
 		for key, value := range reqInfo.Headers {
