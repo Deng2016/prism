@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/term"
 )
 
 // RequestInfo represents the structure of the request information
@@ -19,9 +23,90 @@ type RequestInfo struct {
 	Body    interface{}       `json:"body"`
 }
 
+// ANSI color codes
+const (
+	GreenBackground = "\033[42m"
+	ResetColor      = "\033[0m"
+)
+
+// findAvailablePort tries to find an available port starting from the given port
+func findAvailablePort(startPort int) (int, error) {
+	port := startPort
+	for {
+		// Try to create a listener on the port
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err == nil {
+			// Port is available
+			listener.Close()
+			return port, nil
+		}
+
+		// Check if the error is due to port being in use
+		// Windows error: "Only one usage of each socket address (protocol/network address/port) is normally permitted"
+		// Linux error: "address already in use"
+		if strings.Contains(strings.ToLower(err.Error()), "address already in use") ||
+			strings.Contains(strings.ToLower(err.Error()), "only one usage of each socket address") {
+			fmt.Printf("Port %d is in use, trying next port...\n", port)
+			port++
+			continue
+		}
+
+		// Other error occurred
+		return 0, err
+	}
+}
+
+// getPortFromEnv gets the port from environment variable or returns default
+func getPortFromEnv() int {
+	portStr := os.Getenv("PRISM_PORT")
+	if portStr == "" {
+		fmt.Println("PRISM_PORT environment variable not set, using default port 8080")
+		return 8080
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		fmt.Printf("Invalid port number in PRISM_PORT: %s, using default port 8080\n", portStr)
+		return 8080
+	}
+
+	if port <= 0 || port > 65535 {
+		fmt.Printf("Port number %d is out of valid range (1-65535), using default port 8080\n", port)
+		return 8080
+	}
+
+	return port
+}
+
 func main() {
+	// Enable ANSI color support for Windows
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		// Enable virtual terminal processing for Windows
+		if os.Getenv("TERM") == "" {
+			os.Setenv("TERM", "xterm-256color")
+		}
+	}
+
+	// Get initial port from environment variable
+	initialPort := getPortFromEnv()
+	fmt.Printf("Initial port: %d\n", initialPort)
+
+	// Find available port
+	port, err := findAvailablePort(initialPort)
+	if err != nil {
+		fmt.Printf("Error finding available port: %v\n", err)
+		os.Exit(1)
+	}
+
+	if port != initialPort {
+		fmt.Printf("Port %d is in use, using port %d instead\n", initialPort, port)
+	}
+
+	// Set Gin to release mode
+	gin.SetMode(gin.ReleaseMode)
+
 	// Create a new Gin router with default middleware
-	r := gin.Default()
+	r := gin.New()
 
 	// Handle all HTTP methods for /echo endpoint
 	r.Any("/echo", func(c *gin.Context) {
@@ -115,6 +200,11 @@ func main() {
 	})
 
 	// Start the server
-	fmt.Println("Server is running on http://localhost:8080")
-	r.Run(":8080")
+	serverAddr := fmt.Sprintf(":%d", port)
+	fmt.Printf("Server is running on %shttp://localhost%s%s\n", GreenBackground, serverAddr, ResetColor)
+	fmt.Printf("Echo endpoint: %shttp://localhost%s/echo%s\n", GreenBackground, serverAddr, ResetColor)
+	if err := r.Run(serverAddr); err != nil {
+		fmt.Printf("Error starting server: %v\n", err)
+		os.Exit(1)
+	}
 }
