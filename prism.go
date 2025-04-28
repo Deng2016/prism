@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/term"
@@ -17,10 +18,11 @@ import (
 
 // RequestInfo represents the structure of the request information
 type RequestInfo struct {
-	FullURL string            `json:"full_url"`
-	Method  string            `json:"method"`
-	Headers map[string]string `json:"headers"`
-	Body    interface{}       `json:"body"`
+	FullURL      string            `json:"full_url"`
+	Method       string            `json:"method"`
+	Headers      map[string]string `json:"headers"`
+	Body         interface{}       `json:"body"`
+	ReceivedTime string            `json:"received_time"`
 }
 
 // ANSI color codes
@@ -181,14 +183,16 @@ func echoHandler(c *gin.Context) {
 
 	// Create request info object
 	reqInfo := RequestInfo{
-		FullURL: fullURL,
-		Method:  c.Request.Method,
-		Headers: headers,
-		Body:    body,
+		FullURL:      fullURL,
+		Method:       c.Request.Method,
+		Headers:      headers,
+		Body:         body,
+		ReceivedTime: time.Now().Format("2006-01-02 15:04:05"),
 	}
 
 	// Print request details to console
 	fmt.Printf("\n=== Request Details ===\n")
+	fmt.Printf("Received Time: %s\n", reqInfo.ReceivedTime)
 	fmt.Printf("URL: %s\n", fullURL)
 	fmt.Printf("Method: %s\n", reqInfo.Method)
 	fmt.Printf("Headers:\n")
