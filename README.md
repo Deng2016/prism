@@ -18,6 +18,9 @@ Prism 是一个轻量级的 HTTP 请求回显服务器，专门用于测试和�
   - 彩色显示服务器地址
   - 格式化的请求信息展示
   - 清晰的请求头和请求体显示
+- 双入口支持：
+  - `/echo` 和 `/webhook` 两个路由提供相同功能
+  - 方便不同场景下的使用
 
 ## 安装
 
@@ -74,19 +77,24 @@ export PRISM_PORT=3000
 
 ### 测试示例
 
-1. 发送 GET 请求：
+1. 发送 GET 请求到 `/echo` 端点：
 ```bash
 curl http://localhost:8080/echo
 ```
 
-2. 发送 JSON 请求：
+2. 发送 GET 请求到 `/webhook` 端点：
+```bash
+curl http://localhost:8080/webhook
+```
+
+3. 发送 JSON 请求：
 ```bash
 curl -X POST http://localhost:8080/echo \
   -H "Content-Type: application/json" \
   -d '{"name": "张三", "age": 25}'
 ```
 
-3. 上传文件：
+4. 上传文件：
 ```bash
 curl -X POST http://localhost:8080/echo \
   -F "file=@/path/to/file.txt" \
@@ -118,6 +126,7 @@ curl -X POST http://localhost:8080/echo \
 2. 所有请求信息都会在控制台实时显示
 3. JSON 请求会自动格式化显示，方便查看
 4. 文件上传时会显示文件元信息，而不是文件内容
+5. `/echo` 和 `/webhook` 两个路由功能完全相同，可以根据需要选择使用
 
 ## 许可证
 
