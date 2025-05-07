@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +35,41 @@ const (
 	GreenBackground = "\033[42m"
 	ResetColor      = "\033[0m"
 )
+
+// 全局日志文件
+var logFile *os.File
+
+// 初始化日志文件
+func initLogFile() error {
+	// 获取当前可执行文件所在目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("获取可执行文件路径失败: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+
+	// 创建日志文件
+	logPath := filepath.Join(exeDir, "prism.log")
+	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return fmt.Errorf("创建日志文件失败: %v", err)
+	}
+
+	// 设置日志输出到文件和控制台
+	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
+	// 打印日志文件路径
+	fmt.Printf("日志文件保存路径: %s\n", logPath)
+
+	return nil
+}
+
+// 自定义的日志输出函数
+func logPrint(format string, v ...interface{}) {
+	message := fmt.Sprintf(format, v...)
+	log.Print(message)
+}
 
 // findAvailablePort tries to find an available port starting from the given port
 func findAvailablePort(startPort int) (int, error) {
@@ -143,11 +180,11 @@ func getFullURL(c *gin.Context) string {
 // echoHandler handles the request and returns the request information
 func echoHandler(c *gin.Context) {
 	// Print debug information about the request
-	fmt.Printf("\n=== Incoming Request ===\n")
-	fmt.Printf("Path: %s\n", c.Request.URL.Path)
-	fmt.Printf("Method: %s\n", c.Request.Method)
-	fmt.Printf("Remote IP: %s\n", c.Request.RemoteAddr)
-	fmt.Printf("=====================\n\n")
+	logPrint("\n=== Incoming Request ===")
+	logPrint("Path: %s", c.Request.URL.Path)
+	logPrint("Method: %s", c.Request.Method)
+	logPrint("Remote IP: %s", c.Request.RemoteAddr)
+	logPrint("=====================\n")
 
 	// Create headers map
 	headers := make(map[string]string)
@@ -228,22 +265,29 @@ func echoHandler(c *gin.Context) {
 	}
 
 	// Print request details to console
-	fmt.Printf("\n=== Request Details ===\n")
-	fmt.Printf("Received Time: %s\n", reqInfo.ReceivedTime)
-	fmt.Printf("URL: %s\n", fullURL)
-	fmt.Printf("Method: %s\n", reqInfo.Method)
-	fmt.Printf("Headers:\n")
+	logPrint("\n=== Request Details ===")
+	logPrint("Received Time: %s", reqInfo.ReceivedTime)
+	logPrint("URL: %s", fullURL)
+	logPrint("Method: %s", reqInfo.Method)
+	logPrint("Headers:")
 	for key, value := range reqInfo.Headers {
-		fmt.Printf("  %s: %s\n", key, value)
+		logPrint("  %s: %s", key, value)
 	}
-	fmt.Printf("Body: %s\n", bodyStr)
-	fmt.Printf("=====================\n\n")
+	logPrint("Body: %s", bodyStr)
+	logPrint("=====================\n")
 
 	// Return the request info as JSON response
 	c.JSON(http.StatusOK, reqInfo)
 }
 
 func main() {
+	// 初始化日志文件
+	if err := initLogFile(); err != nil {
+		fmt.Printf("初始化日志文件失败: %v\n", err)
+		os.Exit(1)
+	}
+	defer logFile.Close()
+
 	// Enable ANSI color support for Windows
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		// Enable virtual terminal processing for Windows
@@ -254,17 +298,17 @@ func main() {
 
 	// Get initial port from environment variable
 	initialPort := getPortFromEnv()
-	fmt.Printf("Initial port: %d\n", initialPort)
+	logPrint("Initial port: %d", initialPort)
 
 	// Find available port
 	port, err := findAvailablePort(initialPort)
 	if err != nil {
-		fmt.Printf("Error finding available port: %v\n", err)
+		logPrint("Error finding available port: %v", err)
 		os.Exit(1)
 	}
 
 	if port != initialPort {
-		fmt.Printf("Port %d is in use, using port %d instead\n", initialPort, port)
+		logPrint("Port %d is in use, using port %d instead", initialPort, port)
 	}
 
 	// Set Gin to release mode
@@ -275,10 +319,10 @@ func main() {
 
 	// Add debug middleware to log all requests
 	r.Use(func(c *gin.Context) {
-		fmt.Printf("\n=== Request Debug ===\n")
-		fmt.Printf("Incoming request to: %s\n", c.Request.URL.Path)
-		fmt.Printf("Method: %s\n", c.Request.Method)
-		fmt.Printf("===================\n\n")
+		logPrint("\n=== Request Debug ===")
+		logPrint("Incoming request to: %s", c.Request.URL.Path)
+		logPrint("Method: %s", c.Request.Method)
+		logPrint("===================\n")
 		c.Next()
 	})
 
@@ -288,9 +332,9 @@ func main() {
 
 	// Start the server with explicit IPv4 binding
 	serverAddr := fmt.Sprintf("0.0.0.0:%d", port)
-	fmt.Printf("Server is running on %shttp://%s%s\n", GreenBackground, serverAddr, ResetColor)
-	fmt.Printf("Webhook endpoint: %shttp://%s/webhook%s\n", GreenBackground, serverAddr, ResetColor)
-	fmt.Printf("Eventbus endpoint: %shttp://%s/eventbus%s\n", GreenBackground, serverAddr, ResetColor)
+	logPrint("Server is running on %shttp://%s%s", GreenBackground, serverAddr, ResetColor)
+	logPrint("Webhook endpoint: %shttp://%s/webhook%s", GreenBackground, serverAddr, ResetColor)
+	logPrint("Eventbus endpoint: %shttp://%s/eventbus%s", GreenBackground, serverAddr, ResetColor)
 
 	// Create a custom server with IPv4-only configuration and strict port binding
 	config := net.ListenConfig{
@@ -312,7 +356,7 @@ func main() {
 
 	listener, err := config.Listen(context.Background(), "tcp4", serverAddr)
 	if err != nil {
-		fmt.Printf("Error creating listener: %v\n", err)
+		logPrint("Error creating listener: %v", err)
 		os.Exit(1)
 	}
 
@@ -322,7 +366,7 @@ func main() {
 
 	// Start the server
 	if err := server.Serve(listener); err != nil {
-		fmt.Printf("Error starting server: %v\n", err)
+		logPrint("Error starting server: %v", err)
 		os.Exit(1)
 	}
 }
